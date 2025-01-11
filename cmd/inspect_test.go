@@ -14,10 +14,9 @@ import (
 	"testing"
 
 	"github.com/open-policy-agent/opa/internal/file/archive"
+	"github.com/open-policy-agent/opa/v1/util"
 
-	"github.com/open-policy-agent/opa/util"
-
-	"github.com/open-policy-agent/opa/util/test"
+	"github.com/open-policy-agent/opa/v1/util/test"
 )
 
 func TestDoInspect(t *testing.T) {
@@ -55,7 +54,7 @@ func TestDoInspect(t *testing.T) {
 		}
 
 		res := `{
-    "capabilities": {},
+    "capabilities": {"features": ["rego_v1"]},
     "manifest": {"revision": "rev", "roots": ["foo", "bar", "fuz", "baz", "a", "x"]},
     "signatures_config": {},
     "namespaces": {"data": ["/data.json"], "data.foo": ["/example/foo.rego"]}
@@ -64,7 +63,7 @@ func TestDoInspect(t *testing.T) {
 		exp := util.MustUnmarshalJSON([]byte(res))
 		result := util.MustUnmarshalJSON(out.Bytes())
 		if !reflect.DeepEqual(exp, result) {
-			t.Fatalf("expected inspect output to be %v, got %v", exp, result)
+			t.Fatalf("expected inspect output to be:\n\n%v\n\ngot:\n\n%v", exp, result)
 		}
 	})
 }
@@ -566,22 +565,24 @@ Custom:
 	})
 }
 
-func TestDoInspectV1Compatible(t *testing.T) {
+func TestDoInspect_V0Compatible(t *testing.T) {
 	tests := []struct {
 		note         string
-		v1Compatible bool
+		v0Compatible bool
 		module       string
 		expErrs      []string
 	}{
 		{
-			note: "v0.x, keywords not used",
+			note:         "v0, keywords not used",
+			v0Compatible: true,
 			module: `package test
 p[v] { 
 	v := input.x 
 }`,
 		},
 		{
-			note: "v0.x, no keywords imported, but used",
+			note:         "v0, no keywords imported, but used",
+			v0Compatible: true,
 			module: `package test
 p contains v if { 
 	v := input.x 
@@ -591,7 +592,7 @@ p contains v if {
 			},
 		},
 		{
-			note: "v0.x, keywords imported",
+			note: "v0, keywords imported",
 			module: `package test
 import future.keywords
 p contains v if { 
@@ -599,7 +600,7 @@ p contains v if {
 }`,
 		},
 		{
-			note: "v0.x, rego.v1 imported",
+			note: "v0, rego.v1 imported",
 			module: `package test
 import rego.v1
 p contains v if { 
@@ -607,8 +608,7 @@ p contains v if {
 }`,
 		},
 		{
-			note:         "v1.0, keywords not used",
-			v1Compatible: true,
+			note: "v1, keywords not used",
 			module: `package test
 p[v] { 
 	v := input.x 
@@ -619,16 +619,14 @@ p[v] {
 			},
 		},
 		{
-			note:         "v1.0, no keywords imported",
-			v1Compatible: true,
+			note: "v1, no keywords imported",
 			module: `package test
 p contains v if { 
 	v := input.x 
 }`,
 		},
 		{
-			note:         "v1.0, keywords imported",
-			v1Compatible: true,
+			note: "v1, keywords imported",
 			module: `package test
 import future.keywords
 p contains v if { 
@@ -636,8 +634,7 @@ p contains v if {
 }`,
 		},
 		{
-			note:         "v1.0, rego.v1 imported",
-			v1Compatible: true,
+			note: "v1, rego.v1 imported",
 			module: `package test
 import rego.v1
 p contains v if { 
@@ -665,7 +662,7 @@ p contains v if {
 
 				var out bytes.Buffer
 				params := newInspectCommandParams()
-				params.v1Compatible = tc.v1Compatible
+				params.v0Compatible = tc.v0Compatible
 				err = params.outputFormat.Set(evalJSONOutput)
 				if err != nil {
 					t.Fatalf("Unexpected error: %s", err)
@@ -1039,7 +1036,7 @@ func TestUnknownRefs(t *testing.T) {
 			files: [][2]string{
 				{
 					"/policy.rego", `package test
-p {
+p if {
 	foo.bar(42)
 	contains("foo", "o")
 }`,
@@ -1078,6 +1075,9 @@ p {
           "type": "function"
         }
       }
+    ],
+    "features": [
+      "rego_v1"
     ]
   }
 }`,
@@ -1087,7 +1087,6 @@ p {
 			note: "known ref replaced inside 'with' stmt",
 			files: [][2]string{
 				{"/policy.rego", `package test
-import rego.v1
 
 foo.bar(_) := false
 
@@ -1116,7 +1115,7 @@ test_p if {
   },
   "capabilities": {
     "features": [
-      "rego_v1_import"
+      "rego_v1"
     ]
   }
 }`,
@@ -1125,7 +1124,6 @@ test_p if {
 			note: "unknown ref replaced inside 'with' stmt",
 			files: [][2]string{
 				{"/policy.rego", `package test
-import rego.v1
 
 p if {
 	data.foo.bar(42)
@@ -1152,7 +1150,7 @@ test_p if {
   },
   "capabilities": {
     "features": [
-      "rego_v1_import"
+      "rego_v1"
     ]
   }
 }`,
@@ -1161,7 +1159,6 @@ test_p if {
 			note: "unknown built-in (var) replaced inside 'with' stmt",
 			files: [][2]string{
 				{"/policy.rego", `package test
-import rego.v1
 
 p if {
 	foo(42)
@@ -1188,7 +1185,7 @@ test_p if {
   },
   "capabilities": {
     "features": [
-      "rego_v1_import"
+      "rego_v1"
     ]
   }
 }`,
@@ -1197,7 +1194,6 @@ test_p if {
 			note: "unknown built-in (ref) replaced inside 'with' stmt",
 			files: [][2]string{
 				{"/policy.rego", `package test
-import rego.v1
 
 p if {
 	foo.bar(42)
@@ -1224,7 +1220,7 @@ test_p if {
   },
   "capabilities": {
     "features": [
-      "rego_v1_import"
+      "rego_v1"
     ]
   }
 }`,
@@ -1233,7 +1229,6 @@ test_p if {
 			note: "call replaced by unknown data ref inside 'with' stmt",
 			files: [][2]string{
 				{"/policy.rego", `package test
-import rego.v1
 
 p if {
 	foo(42)
@@ -1280,7 +1275,7 @@ test_p if {
       }
     ],
     "features": [
-      "rego_v1_import"
+      "rego_v1"
     ]
   }
 }`,
@@ -1289,7 +1284,6 @@ test_p if {
 			note: "call replaced by unknown built-in (var) inside 'with' stmt",
 			files: [][2]string{
 				{"/policy.rego", `package test
-import rego.v1
 
 p if {
 	foo(42)
@@ -1317,7 +1311,7 @@ test_p if {
   },
   "capabilities": {
     "features": [
-      "rego_v1_import"
+      "rego_v1"
     ]
   }
 }`,
@@ -1326,7 +1320,6 @@ test_p if {
 			note: "call replaced by unknown built-in (ref) inside 'with' stmt",
 			files: [][2]string{
 				{"/policy.rego", `package test
-import rego.v1
 
 p if {
 	foo(42)
@@ -1374,7 +1367,7 @@ test_p if {
       }
     ],
     "features": [
-      "rego_v1_import"
+      "rego_v1"
     ]
   }
 }`,
@@ -1425,7 +1418,7 @@ func TestCallToUnknownRegoFunction(t *testing.T) {
 		{"/policy.rego", `package test
 import data.x.y
 
-p {
+p if {
 	y(1) == true
 }
 		`},
@@ -1512,12 +1505,252 @@ p {
         },
         "infix": "=="
       }
+    ],
+    "features": [
+      "rego_v1"
     ]
   }
 }`)
 
 		if output != expected {
 			t.Fatalf("Unexpected output. Expected:\n\n%s\n\nGot:\n\n%s", expected, output)
+		}
+	})
+}
+
+func TestDoInspectSingleFileWithAnnotations(t *testing.T) {
+	files := map[string]string{
+		"/a/xxxxxxxxxxxxxxxxxxxxxx/yyyyyyyyyyyyyyyyyyyy/foo.rego": `# METADATA
+# title: pkg-title
+# description: pkg-descr
+# organizations:
+# - pkg-org
+# related_resources:
+# - https://pkg
+# - ref: https://pkg
+#   description: rr-pkg-note
+# authors:
+# - pkg-author
+# schemas:
+# - input: {"type": "boolean"}
+# custom:
+#  pkg: pkg-custom
+package test
+
+# METADATA
+# scope: document
+# title: doc-title
+# description: doc-descr
+# organizations:
+# - doc-org
+# related_resources:
+# - https://doc
+# - ref: https://doc
+#   description: rr-doc-note
+# authors:
+# - doc-author
+# schemas:
+# - input: {"type": "integer"}
+# custom:
+#  doc: doc-custom
+
+# METADATA
+# title: rule-title
+# description: rule-title
+# organizations:
+# - rule-org
+# related_resources:
+# - https://rule
+# - ref: https://rule
+#   description: rr-rule-note
+# authors:
+# - rule-author
+# schemas:
+# - input: {"type": "string"}
+# custom:
+#  rule: rule-custom
+p = 1`,
+	}
+
+	test.WithTempFS(files, func(rootDir string) {
+		fileName := fmt.Sprintf("%s/a/xxxxxxxxxxxxxxxxxxxxxx/yyyyyyyyyyyyyyyyyyyy/foo.rego", rootDir)
+		ps := newInspectCommandParams()
+		ps.listAnnotations = true
+		var out bytes.Buffer
+		err := doInspect(ps, fileName, &out)
+		if err != nil {
+			t.Fatalf("Unexpected error %v", err)
+		}
+
+		shortFileName := truncateFileName(fileName)
+		output := strings.TrimSpace(out.String())
+		expected := strings.TrimSpace(fmt.Sprintf(`
+NAMESPACES:
++-----------+----------------------------------------------------+
+| NAMESPACE |                        FILE                        |
++-----------+----------------------------------------------------+
+| data.test | %[1]s |
++-----------+----------------------------------------------------+
+ANNOTATIONS:
+pkg-title
+=========
+
+pkg-descr
+
+Package:  test
+Location: %[2]s:16
+Scope: package
+
+Organizations:
+ pkg-org
+
+Authors:
+ pkg-author
+
+Schemas:
+ input: {"type":"boolean"}
+
+Related Resources:
+ https://pkg
+ https://pkg rr-pkg-note
+
+Custom:
+ pkg: "pkg-custom"
+
+doc-title
+=========
+
+doc-descr
+
+Package:  test
+Rule:     p
+Location: %[2]s:50
+Scope: document
+
+Organizations:
+ doc-org
+
+Authors:
+ doc-author
+
+Schemas:
+ input: {"type":"integer"}
+
+Related Resources:
+ https://doc
+ https://doc rr-doc-note
+
+Custom:
+ doc: "doc-custom"
+
+rule-title
+==========
+
+rule-title
+
+Package:  test
+Rule:     p
+Location: %[2]s:50
+Scope: rule
+
+Organizations:
+ rule-org
+
+Authors:
+ rule-author
+
+Schemas:
+ input: {"type":"string"}
+
+Related Resources:
+ https://rule
+ https://rule rr-rule-note
+
+Custom:
+ rule: "rule-custom"`, shortFileName, fileName))
+
+		if output != expected {
+			t.Fatalf("Unexpected output. Expected:\n\n%q\n\nGot:\n\n%q", expected, output)
+		}
+	})
+}
+
+func TestDoInspectSingleFile(t *testing.T) {
+	files := map[string]string{
+		"/a/xxxxxxxxxxxxxxxxxxxxxx/yyyyyyyyyyyyyyyyyyyy/foo.rego": `# METADATA
+# title: pkg-title
+# description: pkg-descr
+# organizations:
+# - pkg-org
+# related_resources:
+# - https://pkg
+# - ref: https://pkg
+#   description: rr-pkg-note
+# authors:
+# - pkg-author
+# schemas:
+# - input: {"type": "boolean"}
+# custom:
+#  pkg: pkg-custom
+package test
+
+# METADATA
+# scope: document
+# title: doc-title
+# description: doc-descr
+# organizations:
+# - doc-org
+# related_resources:
+# - https://doc
+# - ref: https://doc
+#   description: rr-doc-note
+# authors:
+# - doc-author
+# schemas:
+# - input: {"type": "integer"}
+# custom:
+#  doc: doc-custom
+
+# METADATA
+# title: rule-title
+# description: rule-title
+# organizations:
+# - rule-org
+# related_resources:
+# - https://rule
+# - ref: https://rule
+#   description: rr-rule-note
+# authors:
+# - rule-author
+# schemas:
+# - input: {"type": "string"}
+# custom:
+#  rule: rule-custom
+p = 1`,
+	}
+
+	test.WithTempFS(files, func(rootDir string) {
+		fileName := fmt.Sprintf("%s/a/xxxxxxxxxxxxxxxxxxxxxx/yyyyyyyyyyyyyyyyyyyy/foo.rego", rootDir)
+		ps := newInspectCommandParams()
+		var out bytes.Buffer
+		err := doInspect(ps, fileName, &out)
+		if err != nil {
+			t.Fatalf("Unexpected error %v", err)
+		}
+
+		shortFileName := truncateFileName(fileName)
+		output := strings.TrimSpace(out.String())
+		expected := strings.TrimSpace(fmt.Sprintf(`
+NAMESPACES:
++-----------+----------------------------------------------------+
+| NAMESPACE |                        FILE                        |
++-----------+----------------------------------------------------+
+| data.test | %s |
++-----------+----------------------------------------------------+
+`, shortFileName))
+
+		if output != expected {
+			t.Fatalf("Unexpected output. Expected:\n\n%q\n\nGot:\n\n%q", expected, output)
 		}
 	})
 }

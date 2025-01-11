@@ -149,8 +149,6 @@ resources, supply the following policy to OPA:
 ```ruby
 package system.log
 
-import rego.v1
-
 mask contains "/input/password" if {
 	# OPA provides the entire decision log event as input to the masking policy.
 	# Refer to the original input document under input.input.
@@ -186,15 +184,17 @@ from the decision log event. The erased paths are recorded on the event itself:
 There are a few restrictions on the JSON Pointers that OPA will erase:
 
 * Pointers must be prefixed with `/input`, `/result`, or `/nd_builtin_cache`.
-* Pointers may be undefined. For example `/input/name/first` in the example
-  above would be undefined. Undefined pointers are ignored.
-* Pointers must refer to object keys. Pointers to array elements will be treated
-  as undefined. For example `/input/emails/0/value` is allowed but `/input/emails/0` is not.
+* Pointers may point to undefined data. For example `/input/name/first` in the
+  example above would be undefined. Masking operations on undefined pointers are
+  ignored.
+* Pointers can also refer to arrays both as part of the path and as the last
+  element in the path. For example, both `/input/users/0/name` and
+  `/input/users/0` would be valid.
 
 In order to **modify** the contents of an input field, the **mask** rule may utilize the following format.
 
 * `"op"` -- The operation to apply when masking. All operations are done at the
-  path specified.  Valid options include:
+  path specified. Valid options include:
 
 |  op | Description  |
 |-----|--------------|
@@ -214,8 +214,6 @@ operations
 ```ruby
 package system.log
 
-import rego.v1
-
 mask contains {"op": "upsert", "path": "/input/password", "value": "**REDACTED**"} if {
 	# conditionally upsert password if it existed in the original event
 	input.input.password
@@ -227,8 +225,6 @@ the following rule format can be used.
 
 ```ruby
 package system.log
-
-import rego.v1
 
 # always upsert, no conditions in rule body
 mask contains {"op": "upsert", "path": "/input/password", "value": "**REDACTED**"}
@@ -268,8 +264,6 @@ This rule will drop all requests to the _allow_ rule in the _kafka_ package, tha
 ```live:drop_rule_example/kafka_allow_rule:module:read_only
 package system.log
 
-import rego.v1
-
 drop if {
 	input.path == "kafka/allow"
 	input.result == true
@@ -281,8 +275,6 @@ Log only requests for _delete_ and _alter_ operations
 
 ```live:drop_rule_example/log_only_delete_alter_operations:module:read_only
 package system.log
-
-import rego.v1
 
 drop if {
 	input.path == "kafka/allow"

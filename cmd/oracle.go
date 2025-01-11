@@ -14,17 +14,30 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/open-policy-agent/opa/ast"
-	"github.com/open-policy-agent/opa/bundle"
 	"github.com/open-policy-agent/opa/cmd/internal/env"
 	"github.com/open-policy-agent/opa/internal/oracle"
 	"github.com/open-policy-agent/opa/internal/presentation"
-	"github.com/open-policy-agent/opa/loader"
+	"github.com/open-policy-agent/opa/v1/ast"
+	"github.com/open-policy-agent/opa/v1/bundle"
+	"github.com/open-policy-agent/opa/v1/loader"
 )
 
 type findDefinitionParams struct {
-	stdinBuffer bool
-	bundlePaths repeatedStringFlag
+	stdinBuffer  bool
+	bundlePaths  repeatedStringFlag
+	v0Compatible bool
+	v1Compatible bool
+}
+
+func (p *findDefinitionParams) regoVersion() ast.RegoVersion {
+	// v0 takes precedence over v1
+	if p.v0Compatible {
+		return ast.RegoV0
+	}
+	if p.v1Compatible {
+		return ast.RegoV1
+	}
+	return ast.DefaultRegoVersion
 }
 
 func init() {
@@ -93,6 +106,8 @@ by the input location.`,
 	findDefinitionCommand.Flags().BoolVarP(&findDefinitionParams.stdinBuffer, "stdin-buffer", "", false, "read buffer from stdin")
 	addBundleFlag(findDefinitionCommand.Flags(), &findDefinitionParams.bundlePaths)
 	oracleCommand.AddCommand(findDefinitionCommand)
+	addV0CompatibleFlag(oracleCommand.Flags(), &findDefinitionParams.v0Compatible, false)
+	addV1CompatibleFlag(oracleCommand.Flags(), &findDefinitionParams.v1Compatible, false)
 	RootCommand.AddCommand(oracleCommand)
 }
 
@@ -116,6 +131,7 @@ func dofindDefinition(params findDefinitionParams, stdin io.Reader, stdout io.Wr
 				// only .rego will work reliably for the purpose of finding definitions
 				return strings.HasPrefix(info.Name(), ".rego")
 			}).
+			WithRegoVersion(params.regoVersion()).
 			AsBundle(params.bundlePaths.v[0])
 		if err != nil {
 			return err
@@ -146,6 +162,8 @@ func dofindDefinition(params findDefinitionParams, stdin io.Reader, stdout io.Wr
 		}
 	}
 
+	// FindDefinition() will instantiate a new compiler, but we don't need to set the
+	// default rego-version because the passed modules already have the rego-version from parsing.
 	result, err := oracle.New().FindDefinition(oracle.DefinitionQuery{
 		Buffer:   bs,
 		Filename: filename,

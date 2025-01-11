@@ -13,12 +13,12 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/open-policy-agent/opa/ast"
-	astJSON "github.com/open-policy-agent/opa/ast/json"
 	"github.com/open-policy-agent/opa/cmd/internal/env"
 	pr "github.com/open-policy-agent/opa/internal/presentation"
-	"github.com/open-policy-agent/opa/loader"
-	"github.com/open-policy-agent/opa/util"
+	"github.com/open-policy-agent/opa/v1/ast"
+	astJSON "github.com/open-policy-agent/opa/v1/ast/json"
+	"github.com/open-policy-agent/opa/v1/loader"
+	"github.com/open-policy-agent/opa/v1/util"
 )
 
 const (
@@ -29,14 +29,19 @@ const (
 type parseParams struct {
 	format       *util.EnumFlag
 	jsonInclude  string
+	v0Compatible bool
 	v1Compatible bool
 }
 
 func (p *parseParams) regoVersion() ast.RegoVersion {
+	// the '--v0--compatible' flag takes precedence over the '--v1-compatible' flag
+	if p.v0Compatible {
+		return ast.RegoV0
+	}
 	if p.v1Compatible {
 		return ast.RegoV1
 	}
-	return ast.RegoV0
+	return ast.DefaultRegoVersion
 }
 
 var configuredParseParams = parseParams{

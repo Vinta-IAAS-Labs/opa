@@ -10,15 +10,15 @@ import (
 	"io"
 	"os"
 
-	"github.com/open-policy-agent/opa/dependencies"
 	"github.com/open-policy-agent/opa/internal/presentation"
+	"github.com/open-policy-agent/opa/v1/dependencies"
 
 	"github.com/spf13/cobra"
 
-	"github.com/open-policy-agent/opa/ast"
 	"github.com/open-policy-agent/opa/cmd/internal/env"
-	"github.com/open-policy-agent/opa/loader"
-	"github.com/open-policy-agent/opa/util"
+	"github.com/open-policy-agent/opa/v1/ast"
+	"github.com/open-policy-agent/opa/v1/loader"
+	"github.com/open-policy-agent/opa/v1/util"
 )
 
 type depsCommandParams struct {
@@ -26,14 +26,19 @@ type depsCommandParams struct {
 	outputFormat *util.EnumFlag
 	ignore       []string
 	bundlePaths  repeatedStringFlag
+	v0Compatible bool
 	v1Compatible bool
 }
 
 func (p *depsCommandParams) regoVersion() ast.RegoVersion {
+	// The '--v0-compatible' flag takes precedence over the '--v1-compatible' flag.
+	if p.v0Compatible {
+		return ast.RegoV0
+	}
 	if p.v1Compatible {
 		return ast.RegoV1
 	}
-	return ast.RegoV0
+	return ast.DefaultRegoVersion
 }
 
 const (
@@ -68,8 +73,6 @@ Example
 Given a policy like this:
 
 	package policy
-
-	import rego.v1
 
 	allow if is_admin
 

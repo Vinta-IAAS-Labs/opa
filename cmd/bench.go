@@ -19,22 +19,22 @@ import (
 	"testing"
 	"time"
 
-	"github.com/open-policy-agent/opa/ast"
+	"github.com/open-policy-agent/opa/v1/ast"
 
-	"github.com/open-policy-agent/opa/server/types"
+	"github.com/open-policy-agent/opa/v1/server/types"
 
-	"github.com/open-policy-agent/opa/logging"
-	"github.com/open-policy-agent/opa/runtime"
+	"github.com/open-policy-agent/opa/v1/logging"
+	"github.com/open-policy-agent/opa/v1/runtime"
 
 	"github.com/olekukonko/tablewriter"
 	"github.com/spf13/cobra"
 
 	"github.com/open-policy-agent/opa/cmd/internal/env"
-	"github.com/open-policy-agent/opa/compile"
 	"github.com/open-policy-agent/opa/internal/presentation"
-	"github.com/open-policy-agent/opa/metrics"
-	"github.com/open-policy-agent/opa/rego"
-	"github.com/open-policy-agent/opa/util"
+	"github.com/open-policy-agent/opa/v1/compile"
+	"github.com/open-policy-agent/opa/v1/metrics"
+	"github.com/open-policy-agent/opa/v1/rego"
+	"github.com/open-policy-agent/opa/v1/util"
 )
 
 // benchmarkCommandParams are a superset of evalCommandParams
@@ -62,8 +62,9 @@ func newBenchmarkEvalParams() benchmarkCommandParams {
 				evalPrettyOutput,
 				benchmarkGoBenchOutput,
 			}),
-			target: util.NewEnumFlag(compile.TargetRego, []string{compile.TargetRego, compile.TargetWasm}),
-			schema: &schemaFlags{},
+			target:       util.NewEnumFlag(compile.TargetRego, []string{compile.TargetRego, compile.TargetWasm}),
+			schema:       &schemaFlags{},
+			capabilities: newcapabilitiesFlag(),
 		},
 		gracefulShutdownPeriod: 10,
 	}
@@ -124,7 +125,9 @@ The optional "gobench" output format conforms to the Go Benchmark Data Format.
 	addIgnoreFlag(benchCommand.Flags(), &params.ignore)
 	addSchemaFlags(benchCommand.Flags(), params.schema)
 	addTargetFlag(benchCommand.Flags(), params.target)
+	addV0CompatibleFlag(benchCommand.Flags(), &params.v0Compatible, false)
 	addV1CompatibleFlag(benchCommand.Flags(), &params.v1Compatible, false)
+	addReadAstValuesFromStoreFlag(benchCommand.Flags(), &params.ReadAstValuesFromStore, false)
 
 	// Shared benchmark flags
 	addCountFlag(benchCommand.Flags(), &params.count, "benchmark")
@@ -304,6 +307,7 @@ func benchE2E(ctx context.Context, args []string, params benchmarkCommandParams,
 		GracefulShutdownPeriod: params.gracefulShutdownPeriod,
 		ShutdownWaitPeriod:     params.shutdownWaitPeriod,
 		ConfigFile:             params.configFile,
+		V0Compatible:           params.v0Compatible,
 		V1Compatible:           params.v1Compatible,
 	}
 

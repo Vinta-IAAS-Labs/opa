@@ -33,8 +33,6 @@ profile.
 ```live:example:module:read_only,openable
 package authz
 
-import rego.v1
-
 allow if {
 	input.path == ["users"]
 	input.method == "POST"
@@ -52,8 +50,6 @@ To test this policy, we will create a separate Rego file that contains test case
 
 ```live:example/test:module:read_only
 package authz_test
-
-import rego.v1
 
 import data.authz
 
@@ -119,6 +115,66 @@ PASS: 3/4
 FAIL: 1/4
 ```
 
+## Enriched Test Report With Variable Values
+
+Sometimes, e.g. when testing rules with complex output, it can be useful to know more about the circumstances that caused a certain expression to fail a test.
+The `--var-values` flag can be used to enrich the test report with the exact expression that caused a test rule to fail, including the values of any variables or references used in the expression.
+
+Consider the following utility module:
+
+```live:example_vars:module:read_only,openable
+package authz
+
+allowed_actions(user) := [action |
+	user in data.actions[action]
+]
+```
+
+with accompanying tests:
+
+```live:example_vars/test:module:read_only
+package authz_test
+
+import data.authz
+
+test_allowed_actions_all_can_read if {
+	users := ["alice", "bob", "jane"]
+	r := ["alice", "bob"]
+	w := ["jane"]
+	p := {"read": r, "write": w}
+
+	every user in users {
+		"read" in authz.allowed_actions(user) with data.actions as p
+	}
+}
+```
+
+Exercising the tests with the `--var-values` flag:
+
+```console
+opa test . --var-values
+FAILURES
+--------------------------------------------------------------------------------
+data.authz_test.test_allowed_actions_all_can_read: FAIL (904µs)
+
+  util_test.rego:13:
+    "read" in authz.allowed_actions(user) with data.actions as p
+              |                     |                          |
+              |                     |                          {"read": ["alice", "bob"], "write": ["jane"]}
+              |                     "jane"
+              ["write"]
+
+SUMMARY
+--------------------------------------------------------------------------------
+util_test.rego:
+data.authz_test.test_allowed_actions_all_can_read: FAIL (904µs)
+--------------------------------------------------------------------------------
+FAIL: 1/1
+```
+
+The test failed because it expected users with __write__ permission to implicitly also have the __read__ permission, an expectation the function under test didn't meet.
+By including the failing expression and its local variable assignments in the test report, we make troubleshooting easier for the developer, as it's immediately apparent what assertion and combination of parameters caused the test to fail.
+
 ## Test Format
 
 Tests are expressed as standard Rego rules with a convention that the rule
@@ -126,8 +182,6 @@ name is prefixed with `test_`. It's a good practice for tests to be placed in a 
 
 ```live:example_format:module:read_only
 package mypackage_test
-
-import rego.v1
 
 import data.mypackage
 
@@ -161,8 +215,6 @@ by zero condition) the test result is marked as an `ERROR`. Tests prefixed with
 
 ```live:example_results:module:read_only
 package example_test
-
-import rego.v1
 
 import data.example
 
@@ -266,8 +318,6 @@ Below is a simple policy that depends on the data document.
 ```live:with_keyword:module:read_only,openable
 package authz
 
-import rego.v1
-
 allow if {
 	some x in data.policies
 	x.name == "test_policy"
@@ -283,8 +333,6 @@ Below is the Rego file to test the above policy.
 
 ```live:with_keyword/tests:module:read_only
 package authz_test
-
-import rego.v1
 
 import data.authz
 
@@ -314,8 +362,6 @@ Below is an example to replace a **rule without arguments**.
 ```live:with_keyword_rules:module:read_only
 package authz
 
-import rego.v1
-
 allow1 if allow2
 
 allow2 if 2 == 1
@@ -325,8 +371,6 @@ allow2 if 2 == 1
 
 ```live:with_keyword_rules/tests:module:read_only
 package authz_test
-
-import rego.v1
 
 import data.authz
 
@@ -349,8 +393,6 @@ Here is an example to replace a rule's **built-in function** with a user-defined
 ```live:with_keyword_builtins:module:read_only
 package authz
 
-import rego.v1
-
 import data.jwks.cert
 
 allow if {
@@ -362,8 +404,6 @@ allow if {
 
 ```live:with_keyword_builtins/tests:module:read_only
 package authz_test
-
-import rego.v1
 
 import data.authz
 
@@ -406,8 +446,6 @@ function by a built-in function.
 ```live:with_keyword_funcs:module:read_only
 package authz
 
-import rego.v1
-
 replace_rule if {
 	replace(input.label)
 }
@@ -421,8 +459,6 @@ replace(label) if {
 
 ```live:with_keyword_funcs/tests:module:read_only
 package authz_test
-
-import rego.v1
 
 import data.authz
 

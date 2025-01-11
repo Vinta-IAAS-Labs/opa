@@ -39,8 +39,6 @@ cd bundles
 ```live:example:module:openable
 package httpapi.authz
 
-import rego.v1
-
 # bob is alice's manager, and betty is charlie's.
 subordinates := {"alice": [], "charlie": [], "bob": ["alice"], "betty": ["charlie"]}
 
@@ -122,6 +120,12 @@ Then run `docker-compose` to pull and run the containers.
 ```shell
 docker-compose -f docker-compose.yml up
 ```
+
+{{< info >}}
+This example shows conceptually a 'manual' REST API integration with OPA.
+You might find it easier to build your OPA integration using one of the
+[language SDKs](/ecosystem/#languages) than working with the REST API directly.
+{{< /info >}}
 
 Every time the demo web server receives an HTTP request, it
 asks OPA to decide whether an HTTP API is authorized or not
@@ -211,8 +215,6 @@ this.
 ```live:hr_example:module:read_only,openable
 package httpapi.authz
 
-import rego.v1
-
 # Allow HR members to get anyone's salary.
 allow if {
 	input.method == "GET"
@@ -257,8 +259,6 @@ real world, let's try a similar exercise utilizing the JWT utilities of OPA.
 
 ```live:jwt_example:module:openable
 package httpapi.authz
-
-import rego.v1
 
 default allow := false
 
