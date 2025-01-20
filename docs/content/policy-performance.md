@@ -20,8 +20,6 @@ For example, the following rule has one local variable `user`, and that variable
 ```live:linear:module:read_only,openable
 package linear
 
-import rego.v1
-
 allow if {
 	some user
 	input.method == "GET"
@@ -72,8 +70,6 @@ Here is an example policy from the [rule-indexing blog](https://blog.openpolicya
 
 ```live:indexed:module:openable
 package indexed
-
-import rego.v1
 
 default allow := false
 
@@ -153,8 +149,6 @@ The most common case for this are a set of `allow` rules:
 ```live:ee:module:read_only
 package earlyexit
 
-import rego.v1
-
 allow if {
 	input.user == "alice"
 }
@@ -174,8 +168,6 @@ Intuitively, the value can be anything that does not contain a variable:
 
 ```live:eeexamples:module:read_only
 package earlyexit.examples
-
-import rego.v1
 
 # p, q, r and s could be evaluated with early-exit semantics:
 
@@ -220,8 +212,6 @@ When "early exit" is possible for a (set of) rules, iterations inside that rule 
 ```live:eeiteration:module:read_only
 package earlyexit.iteration
 
-import rego.v1
-
 p if {
 	some p
 	data.projects[p] == "project-a"
@@ -238,8 +228,6 @@ early; an evaluation with `{"user": "bob", "group": "admins"}` *would not*:
 
 ```live:eeindex:module:read_only
 package earlyexit
-
-import rego.v1
 
 allow if {
 	input.user == "alice"
@@ -325,7 +313,6 @@ To implement the policy above we could write:
 
 ```rego
 package example
-import rego.v1
 
 deny contains msg if {
 	some i
@@ -363,7 +350,6 @@ The following examples shows rules that are **not** indexed:
 
 ```rego
 package example
-import rego.v1
 
 not_indexed_because_missing_assignment if {
 	x := input[_]
@@ -438,7 +424,6 @@ let's take the following policy:
 
 ```rego
 package test
-import rego.v1
 
 p if {
 	a := 1
@@ -488,7 +473,6 @@ sample policy.
 
 ```live:profile:module:read_only,openable
 package rbac
-import rego.v1
 
 # Example input request
 
@@ -776,8 +760,6 @@ Adding a unit test file for the [policy source as shown above](#example-policy):
 ```rego
 package rbac
 
-import rego.v1
-
 test_user_has_role_dev if {
 	user_has_role.dev with input as {"subject": "alice"}
 }
@@ -974,6 +956,22 @@ Same as `-O=1` except virtual documents produced by rules that depend on unknown
 into call sites. In addition, more aggressive inlining is applied within rules. This includes
 [copy propagation](https://en.wikipedia.org/wiki/Copy_propagation) and inlining of certain negated
 statements that would otherwise generate support rules.
+
+## Storage Optimization
+
+### In-Memory Store Read Optimization
+
+During normal operation, data values read from storage are converted to an AST representation that is used during policy evaluation. 
+This conversion can be expensive both in execution time and in memory usage, especially for large data values. 
+The default in-memory store can be configured to optimize for read speed by precomputing the AST representation of data values during storage write operations. 
+This removes the time spent converting raw data values to AST during policy evaluation, improving performance. 
+
+The memory footprint of the store will increase, as processed AST values generally take up more space in memory than the corresponding raw data values, but overall memory usage of OPA might remain more stable over time, as pre-converted data is shared across evaluations and isn't recomputed for each evaluation, which can cause spikes in memory usage.
+Storage write operations will be slower due to the additional processing required to precompute the AST representation of data values. This can impact startup time and bundle loading/updates, especially for large data values. 
+
+This feature can be enabled for `opa run`, `opa eval`, and `opa bench` by setting the `--optimize-store-for-read-speed` flag.
+
+Users are recommended to do performance testing to determine the optimal configuration for their use case.
 
 ## Key Takeaways
 

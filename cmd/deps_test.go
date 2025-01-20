@@ -13,19 +13,85 @@ import (
 	"testing"
 
 	"github.com/open-policy-agent/opa/internal/file/archive"
-	"github.com/open-policy-agent/opa/util/test"
+	"github.com/open-policy-agent/opa/v1/util/test"
 )
 
-func TestDepsV1Compatible(t *testing.T) {
+func TestDeps_DefaultRegoVersion(t *testing.T) {
+	tests := []struct {
+		note    string
+		module  string
+		query   string
+		expErrs []string
+	}{
+		{
+			note: "v0 module",
+			module: `package test
+a[x] {
+	x := 42
+}`,
+			query: `data.test.p`,
+			expErrs: []string{
+				"test.rego:2: rego_parse_error: `if` keyword is required before rule body",
+				"test.rego:2: rego_parse_error: `contains` keyword is required for partial set rules",
+			},
+		},
+		{
+			note: "v1 module",
+			module: `package test
+a contains x if {
+	x := 42
+}`,
+			query: `data.test.a`,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.note, func(t *testing.T) {
+			files := map[string]string{
+				"test.rego": tc.module,
+			}
+
+			test.WithTempFS(files, func(rootPath string) {
+				params := newDepsCommandParams()
+				_ = params.outputFormat.Set(depsFormatPretty)
+
+				for f := range files {
+					_ = params.dataPaths.Set(filepath.Join(rootPath, f))
+				}
+
+				err := deps([]string{tc.query}, params, io.Discard)
+
+				if len(tc.expErrs) > 0 {
+					if err == nil {
+						t.Fatalf("Expected error but got nil")
+					}
+					for _, expErr := range tc.expErrs {
+						if !strings.Contains(err.Error(), expErr) {
+							t.Fatalf("Expected error:\n\n%s\n\ngot:\n\n%s", expErr, err.Error())
+						}
+					}
+				} else {
+					if err != nil {
+						t.Fatalf("Unexpected error: %v", err)
+					}
+				}
+			})
+		})
+	}
+}
+
+func TestDepsCompatibleFlags(t *testing.T) {
 	tests := []struct {
 		note         string
+		v0Compatible bool
 		v1Compatible bool
 		module       string
 		query        string
 		expErrs      []string
 	}{
 		{
-			note: "v0.x, no keywords",
+			note:         "v0, no keywords",
+			v0Compatible: true,
 			module: `package test
 p[3] {
 	input.x = 1
@@ -33,7 +99,8 @@ p[3] {
 			query: `data.test.p`,
 		},
 		{
-			note: "v0.x, keywords not imported, but used",
+			note:         "v0, keywords not imported, but used",
+			v0Compatible: true,
 			module: `package test
 p contains 3 if {
 	input.x = 1
@@ -45,7 +112,8 @@ p contains 3 if {
 			},
 		},
 		{
-			note: "v0.x, keywords imported",
+			note:         "v0, keywords imported",
+			v0Compatible: true,
 			module: `package test
 import future.keywords
 p contains 3 if {
@@ -54,7 +122,8 @@ p contains 3 if {
 			query: `data.test.p`,
 		},
 		{
-			note: "v0.x, rego.v1 imported",
+			note:         "v0, rego.v1 imported",
+			v0Compatible: true,
 			module: `package test
 import rego.v1
 p contains 3 if {
@@ -63,7 +132,7 @@ p contains 3 if {
 			query: `data.test.p`,
 		},
 		{
-			note:         "v1.0, no keywords",
+			note:         "v1, no keywords",
 			v1Compatible: true,
 			module: `package test
 p[3] {
@@ -76,7 +145,7 @@ p[3] {
 			},
 		},
 		{
-			note:         "v1.0, no keyword imports",
+			note:         "v1, no keyword imports",
 			v1Compatible: true,
 			module: `package test
 p contains 3 if {
@@ -85,7 +154,7 @@ p contains 3 if {
 			query: `data.test.p`,
 		},
 		{
-			note:         "v1.0, keywords imported",
+			note:         "v1, keywords imported",
 			v1Compatible: true,
 			module: `package test
 import future.keywords
@@ -95,7 +164,54 @@ p contains 3 if {
 			query: `data.test.p`,
 		},
 		{
-			note:         "v1.0, rego.v1 imported",
+			note:         "v1, rego.v1 imported",
+			v1Compatible: true,
+			module: `package test
+import rego.v1
+p contains 3 if {
+	input.x = 1
+}`,
+			query: `data.test.p`,
+		},
+		// v0 takes precedence over v1
+		{
+			note:         "v0+v1, no keywords",
+			v0Compatible: true,
+			v1Compatible: true,
+			module: `package test
+p[3] {
+	input.x = 1
+}`,
+			query: `data.test.p`,
+		},
+		{
+			note:         "v0+v1, keywords not imported, but used",
+			v0Compatible: true,
+			v1Compatible: true,
+			module: `package test
+p contains 3 if {
+	input.x = 1
+}`,
+			query: `data.test.p`,
+			expErrs: []string{
+				"rego_parse_error: var cannot be used for rule name",
+				"rego_parse_error: number cannot be used for rule name",
+			},
+		},
+		{
+			note:         "v0+v1, keywords imported",
+			v0Compatible: true,
+			v1Compatible: true,
+			module: `package test
+import future.keywords
+p contains 3 if {
+	input.x = 1
+}`,
+			query: `data.test.p`,
+		},
+		{
+			note:         "v0+v1, rego.v1 imported",
+			v0Compatible: true,
 			v1Compatible: true,
 			module: `package test
 import rego.v1
@@ -114,6 +230,7 @@ p contains 3 if {
 
 			test.WithTempFS(files, func(rootPath string) {
 				params := newDepsCommandParams()
+				params.v0Compatible = tc.v0Compatible
 				params.v1Compatible = tc.v1Compatible
 				_ = params.outputFormat.Set(depsFormatPretty)
 

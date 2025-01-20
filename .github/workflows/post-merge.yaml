@@ -5,13 +5,18 @@ on:
     branches:
       - main
 
+permissions:  
+  contents: read
+
 jobs:
   generate:
+    permissions:
+      contents: write  # for Git to git push
     name: Sync Generated Code and Docs
     runs-on: ubuntu-22.04
     steps:
       - name: Check out code
-        uses: actions/checkout@v4
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
           token: ${{ secrets.GH_PUSH_TOKEN }} # required to push to protected branch below
 
@@ -72,7 +77,7 @@ jobs:
     needs: generate
     steps:
       - name: Check out code
-        uses: actions/checkout@v4
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
 
       - name: Unit Test Golang
         run: make ci-go-test-coverage
@@ -84,7 +89,7 @@ jobs:
     needs: generate
     steps:
       - name: Check out code
-        uses: actions/checkout@v4
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
 
       - name: Build Linux and Windows
         run: make ci-go-ci-build-linux ci-go-ci-build-linux-static ci-go-ci-build-windows
@@ -100,7 +105,7 @@ jobs:
           TELEMETRY_URL: ${{ secrets.TELEMETRY_URL }}
 
       - name: Upload binaries
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@65c4c4a1ddee5b72f698fdd19549f0f0fb45cf08 # v4.6.0
         if: always()
         with:
           name: binaries-linux-windows
@@ -112,14 +117,14 @@ jobs:
     needs: generate
     steps:
       - name: Check out code
-        uses: actions/checkout@v4
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
 
       - id: go_version
         name: Read go version
         run: echo "go_version=$(cat .go-version)" >> $GITHUB_OUTPUT
 
       - name: Install Go (${{ steps.go_version.outputs.go_version }})
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@3041bf56c941b39c61721a86cd11f3bb1338122a # v5.2.0
         with:
           go-version: ${{ steps.go_version.outputs.go_version }}
 
@@ -132,7 +137,7 @@ jobs:
           TELEMETRY_URL: ${{ secrets.TELEMETRY_URL }}
 
       - name: Upload binaries (darwin)
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@65c4c4a1ddee5b72f698fdd19549f0f0fb45cf08 # v4.6.0
         if: always()
         with:
           name: binaries-darwin
@@ -144,21 +149,21 @@ jobs:
     needs: [release-build, release-build-darwin]
     steps:
       - name: Check out code
-        uses: actions/checkout@v4
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
 
       - name: Test
         run: make ci-release-test
         timeout-minutes: 60
 
       - name: Download release binaries
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@fa0a91b85d4f404e444e00e005971372dc801d16 # v4.1.8
         with:
           pattern: binaries-*
           merge-multiple: true
           path: _release
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+        uses: docker/setup-buildx-action@6524bf65af31da8d45b59e8c27de4bd072b392f5 # v3.8.0
 
       - name: Deploy OPA Edge
         env:
@@ -178,7 +183,7 @@ jobs:
     needs: generate
     steps:
       - name: Check out code
-        uses: actions/checkout@v4
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
 
       - name: Build and Push opa-wasm-builder
         env:

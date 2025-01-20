@@ -18,15 +18,15 @@ import (
 
 	"github.com/olekukonko/tablewriter"
 
-	"github.com/open-policy-agent/opa/ast"
-	"github.com/open-policy-agent/opa/cover"
-	"github.com/open-policy-agent/opa/format"
-	"github.com/open-policy-agent/opa/loader"
-	"github.com/open-policy-agent/opa/metrics"
-	"github.com/open-policy-agent/opa/profiler"
-	"github.com/open-policy-agent/opa/rego"
-	"github.com/open-policy-agent/opa/storage"
-	"github.com/open-policy-agent/opa/topdown"
+	"github.com/open-policy-agent/opa/v1/ast"
+	"github.com/open-policy-agent/opa/v1/cover"
+	"github.com/open-policy-agent/opa/v1/format"
+	"github.com/open-policy-agent/opa/v1/loader"
+	"github.com/open-policy-agent/opa/v1/metrics"
+	"github.com/open-policy-agent/opa/v1/profiler"
+	"github.com/open-policy-agent/opa/v1/rego"
+	"github.com/open-policy-agent/opa/v1/storage"
+	"github.com/open-policy-agent/opa/v1/topdown"
 )
 
 // DefaultProfileSortOrder is the default ordering unless something is specified in the CLI
@@ -282,8 +282,21 @@ func Values(w io.Writer, r Output) error {
 
 // Pretty prints all of r to w in a human-readable format.
 func Pretty(w io.Writer, r Output) error {
+	return PrettyWithOptions(w, r, PrettyOptions{
+		TraceOpts: topdown.PrettyTraceOptions{
+			Locations: true,
+		},
+	})
+}
+
+type PrettyOptions struct {
+	TraceOpts topdown.PrettyTraceOptions
+}
+
+// PrettyWithOptions prints all of r to w in a human-readable format.
+func PrettyWithOptions(w io.Writer, r Output, opts PrettyOptions) error {
 	if len(r.Explanation) > 0 {
-		if err := prettyExplanation(w, r.Explanation); err != nil {
+		if err := prettyExplanation(w, r.Explanation, opts.TraceOpts); err != nil {
 			return err
 		}
 	}
@@ -444,25 +457,25 @@ func prettyPartial(w io.Writer, pq *rego.PartialQueries) error {
 	var maxWidth int
 
 	for i := range pq.Queries {
-		s, width, err := prettyASTNode(pq.Queries[i])
+		f, width, err := prettyASTNode(pq.Queries[i], ast.DefaultRegoVersion)
 		if err != nil {
 			return err
 		}
 		if width > maxWidth {
 			maxWidth = width
 		}
-		table.Append([]string{fmt.Sprintf("Query %d", i+1), s})
+		table.Append([]string{fmt.Sprintf("Query %d", i+1), f})
 	}
 
-	for i := range pq.Support {
-		s, width, err := prettyASTNode(pq.Support[i])
+	for i, s := range pq.Support {
+		f, width, err := prettyASTNode(s, s.RegoVersion())
 		if err != nil {
 			return err
 		}
 		if width > maxWidth {
 			maxWidth = width
 		}
-		table.Append([]string{fmt.Sprintf("Support %d", i+1), s})
+		table.Append([]string{fmt.Sprintf("Support %d", i+1), f})
 	}
 
 	table.SetColMinWidth(1, maxWidth)
@@ -472,8 +485,8 @@ func prettyPartial(w io.Writer, pq *rego.PartialQueries) error {
 }
 
 // prettyASTNode is used for pretty-printing the result of partial eval
-func prettyASTNode(x interface{}) (string, int, error) {
-	bs, err := format.AstWithOpts(x, format.Opts{IgnoreLocations: true})
+func prettyASTNode(x interface{}, regoVersion ast.RegoVersion) (string, int, error) {
+	bs, err := format.AstWithOpts(x, format.Opts{IgnoreLocations: true, RegoVersion: regoVersion})
 	if err != nil {
 		return "", 0, fmt.Errorf("format error: %w", err)
 	}
@@ -554,8 +567,8 @@ func prettyAggregatedProfile(w io.Writer, profile []profiler.ExprStatsAggregated
 	return nil
 }
 
-func prettyExplanation(w io.Writer, explanation []*topdown.Event) error {
-	topdown.PrettyTraceWithLocation(w, explanation)
+func prettyExplanation(w io.Writer, explanation []*topdown.Event, opts topdown.PrettyTraceOptions) error {
+	topdown.PrettyTraceWithOpts(w, explanation, opts)
 	return nil
 }
 

@@ -16,9 +16,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/open-policy-agent/opa/logging"
-	"github.com/open-policy-agent/opa/test/e2e"
-	"github.com/open-policy-agent/opa/util/test"
+	"github.com/open-policy-agent/opa/v1/logging"
+	"github.com/open-policy-agent/opa/v1/test/e2e"
+	"github.com/open-policy-agent/opa/v1/util/test"
 	"github.com/spf13/cobra"
 )
 
@@ -59,7 +59,7 @@ func TestRunServerBaseListenOnLocalhost(t *testing.T) {
 
 	ctx, cancel := context.WithCancel(context.Background())
 
-	rt, err := initRuntime(ctx, params, nil, false)
+	rt, err := initRuntime(ctx, params, nil, true)
 	if err != nil {
 		t.Fatalf("Unexpected error: %v", err)
 	}
@@ -201,10 +201,11 @@ func TestInitRuntimeSkipKnownSchemaCheck(t *testing.T) {
 
 	fs := map[string]string{
 		"test/authz.rego": `package system.authz
+		import rego.v1
 
 		default allow := false
 
-		allow {
+		allow if {
           input.identty = "foo"        # this is a typo
 		}`,
 	}
@@ -234,6 +235,96 @@ func TestInitRuntimeSkipKnownSchemaCheck(t *testing.T) {
 			t.Fatal(err)
 		}
 	})
+}
+
+func TestRunServerUploadPolicy(t *testing.T) {
+	v0Policy := `package test
+	p { q["a"] }
+	q[x] {
+		x = "a"
+	}`
+
+	v1Policy := `package test
+	p if { q["a"] }
+	q contains x if {
+		x = "a"
+	}`
+
+	tests := []struct {
+		note         string
+		v0Compatible bool
+		module       string
+		expErr       bool
+	}{
+		{
+			note:         "v0-compatible, v0 policy",
+			v0Compatible: true,
+			module:       v0Policy,
+		},
+		{
+			note:         "v0-compatible, v1 policy",
+			v0Compatible: true,
+			module:       v1Policy,
+			expErr:       true,
+		},
+		{
+			note:         "v1, v0 policy",
+			v0Compatible: false,
+			module:       v0Policy,
+			expErr:       true,
+		},
+		{
+			note:         "v1, v1 policy",
+			v0Compatible: false,
+			module:       v1Policy,
+		},
+	}
+
+	for i, tc := range tests {
+		t.Run(tc.note, func(t *testing.T) {
+			ctx, cancel := context.WithCancel(context.Background())
+
+			params := newTestRunParams()
+			params.rt.V0Compatible = tc.v0Compatible
+
+			rt, err := initRuntime(ctx, params, nil, false)
+			if err != nil {
+				t.Fatalf("Unexpected error: %v", err)
+			}
+
+			testRuntime := e2e.WrapRuntime(ctx, cancel, rt)
+
+			done := make(chan bool)
+			go func() {
+				err := rt.Serve(ctx)
+				if err != nil {
+					t.Errorf("Unexpected error: %s", err)
+				}
+				done <- true
+			}()
+
+			err = testRuntime.WaitForServer()
+			if err != nil {
+				t.Fatalf("Unexpected error: %s", err)
+			}
+
+			// upload policy
+			err = testRuntime.UploadPolicy(fmt.Sprintf("mod%d", i), bytes.NewBufferString(tc.module))
+
+			if tc.expErr {
+				if err == nil {
+					t.Fatalf("Expected error but got nil")
+				}
+			} else {
+				if err != nil {
+					t.Fatalf("Unexpected error: %s", err)
+				}
+			}
+
+			cancel()
+			<-done
+		})
+	}
 }
 
 func TestRunServerCheckLogTimestampFormat(t *testing.T) {
@@ -345,7 +436,7 @@ func TestInitRuntimeAddrSetByUser(t *testing.T) {
 func newTestRunParams() runCmdParams {
 	params := newRunParams()
 	params.rt.GracefulShutdownPeriod = 1
-	params.rt.Addrs = &[]string{"localhost:0"}
+	params.rt.Addrs = &[]string{"localhost:8181"}
 	params.rt.DiagnosticAddrs = &[]string{}
 	params.serverMode = true
 	return params
